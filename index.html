@@ -1,214 +1,114 @@
 <!DOCTYPE html>
-
 <html lang="de">
-
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-```
-<meta charset="UTF-8">
+    <title>HinterHalt</title>
 
-<meta name="viewport"
-      content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f2f2f2;
+            color: #222;
+            text-align: center;
+        }
 
-<title>WalkAlert</title>
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
 
-<style>
+        h1 {
+            font-size: 42px;
+            margin-bottom: 10px;
+        }
 
-    * {
-        box-sizing: border-box;
-    }
+        .subtitle {
+            font-size: 18px;
+            color: #666;
+            margin-bottom: 35px;
+        }
 
-    body {
-        margin: 0;
-        font-family: Arial, sans-serif;
+        button {
+            width: 100%;
+            padding: 18px;
+            font-size: 20px;
+            border: none;
+            border-radius: 12px;
+            background: #222;
+            color: white;
+            cursor: pointer;
+        }
 
-        background: #eeeeee;
+        button:active {
+            transform: scale(0.98);
+        }
 
-        min-height: 100vh;
+        .status {
+            margin-top: 25px;
+            font-size: 18px;
+        }
 
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }
+        .distance-box {
+            margin-top: 30px;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
 
-    .box {
+        .distance {
+            font-size: 60px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
 
-        background: white;
-
-        width: 90%;
-        max-width: 450px;
-
-        padding: 35px;
-
-        border-radius: 25px;
-
-        text-align: center;
-
-        box-shadow:
-            0 5px 20px rgba(0,0,0,0.15);
-    }
-
-    h1 {
-
-        font-size: 42px;
-
-        margin: 0 0 10px 0;
-    }
-
-    .subtitle {
-
-        color: #777;
-
-        margin-bottom: 30px;
-    }
-
-    .status {
-
-        display: inline-block;
-
-        padding: 10px 18px;
-
-        border-radius: 20px;
-
-        background: #eeeeee;
-
-        margin-bottom: 30px;
-    }
-
-    .connected {
-
-        background: #d8f5dc;
-
-        color: #16802c;
-    }
-
-    .label {
-
-        color: #777;
-
-        font-size: 18px;
-    }
-
-    .distance {
-
-        font-size: 75px;
-
-        font-weight: bold;
-
-        margin: 10px 0 25px;
-    }
-
-    .unit {
-
-        font-size: 30px;
-
-        color: #777;
-    }
-
-    button {
-
-        width: 100%;
-
-        padding: 17px;
-
-        border: none;
-
-        border-radius: 15px;
-
-        background: #222;
-
-        color: white;
-
-        font-size: 18px;
-
-        font-weight: bold;
-
-        cursor: pointer;
-    }
-
-    button:hover {
-
-        opacity: 0.8;
-    }
-
-    button:disabled {
-
-        background: #999;
-
-        cursor: default;
-    }
-
-    .error {
-
-        color: #d00000;
-
-        margin-top: 20px;
-
-    }
-
-</style>
-```
-
+        .unit {
+            font-size: 20px;
+            color: #666;
+        }
+    </style>
 </head>
 
 <body>
 
-<div class="box">
+<div class="container">
 
-```
-<h1>WalkAlert</h1>
+    <h1>HinterHalt</h1>
 
-<div class="subtitle">
-    Bluetooth Radar
-</div>
+    <div class="subtitle">
+        Abstandserkennung
+    </div>
 
+    <button id="connectButton">
+        Mit HinterHalt verbinden
+    </button>
 
-<div id="status"
-     class="status">
+    <div class="status" id="status">
+        Nicht verbunden
+    </div>
 
-    Nicht verbunden
+    <div class="distance-box">
 
-</div>
+        <div>Entfernung</div>
 
+        <div class="distance" id="distance">
+            --
+        </div>
 
-<div class="label">
-    Abstand
-</div>
+        <div class="unit">
+            Meter
+        </div>
 
-
-<div class="distance">
-
-    <span id="distance">
-        --
-    </span>
-
-    <span class="unit">
-        m
-    </span>
+    </div>
 
 </div>
 
-
-<button id="connect">
-
-    Mit WalkAlert verbinden
-
-</button>
-
-
-<div id="error"
-     class="error">
-</div>
-```
-
-</div>
 
 <script>
-
-
-// ===============================
-// BLE UUIDs
-// ===============================
 
 const SERVICE_UUID =
     "12345678-1234-1234-1234-1234567890ab";
@@ -217,12 +117,8 @@ const CHARACTERISTIC_UUID =
     "abcd1234-5678-90ab-cdef-1234567890ab";
 
 
-// ===============================
-// HTML Elemente
-// ===============================
-
 const connectButton =
-    document.getElementById("connect");
+    document.getElementById("connectButton");
 
 const status =
     document.getElementById("status");
@@ -230,166 +126,99 @@ const status =
 const distance =
     document.getElementById("distance");
 
-const error =
-    document.getElementById("error");
+
+connectButton.addEventListener("click", async () => {
+
+    try {
+
+        status.textContent = "Suche HinterHalt...";
+
+        // Bluetooth-Gerät auswählen
+        const device = await navigator.bluetooth.requestDevice({
+
+            filters: [
+                {
+                    name: "HinterHalt"
+                }
+            ],
+
+            optionalServices: [
+                SERVICE_UUID
+            ]
+
+        });
 
 
-// ===============================
-// BLE Verbindung
-// ===============================
-
-connectButton.addEventListener(
-    "click",
-    connectBluetooth
-);
-
-
-async function connectBluetooth()
-{
-
-    error.textContent = "";
-
-    status.textContent =
-        "Suche nach WalkAlert...";
-
-    try
-    {
-
-        // Bluetooth Gerät auswählen
-
-        const device =
-            await navigator.bluetooth.requestDevice({
-
-                filters: [
-                    {
-                        name: "WalkAlert"
-                    }
-                ],
-
-                optionalServices: [
-                    SERVICE_UUID
-                ]
-
-            });
-
-
-        status.textContent =
-            "Verbinde...";
+        status.textContent = "Verbinde...";
 
 
         // Verbindung herstellen
-
         const server =
             await device.gatt.connect();
 
 
-        // Service suchen
-
+        // Service holen
         const service =
-            await server.getPrimaryService(
-                SERVICE_UUID
-            );
+            await server.getPrimaryService(SERVICE_UUID);
 
 
-        // Characteristic suchen
-
+        // Characteristic holen
         const characteristic =
             await service.getCharacteristic(
                 CHARACTERISTIC_UUID
             );
 
 
-        // Notifications aktivieren
-
+        // Benachrichtigungen aktivieren
         await characteristic.startNotifications();
 
 
         characteristic.addEventListener(
             "characteristicvaluechanged",
-            receiveData
+            handleDistance
         );
 
 
         status.textContent =
-            "Verbunden";
-
-        status.classList.add(
-            "connected"
-        );
-
+            "✓ Mit HinterHalt verbunden";
 
         connectButton.textContent =
-            "WalkAlert verbunden";
-
-        connectButton.disabled =
-            true;
+            "Verbunden";
 
 
-    }
+    } catch (error) {
 
-    catch (e)
-    {
-
-        console.error(e);
+        console.error(error);
 
         status.textContent =
-            "Nicht verbunden";
-
-        error.textContent =
-            "Bluetooth-Verbindung fehlgeschlagen.";
-
-        connectButton.disabled =
-            false;
+            "Verbindung fehlgeschlagen: " + error.message;
 
     }
 
-}
+});
 
 
-// ===============================
-// Daten empfangen
-// ===============================
-
-function receiveData(event)
-{
+function handleDistance(event) {
 
     const value =
-        event.target.value;
-
-
-    const decoder =
-        new TextDecoder(
-            "utf-8"
+        new TextDecoder().decode(
+            event.target.value
         );
 
-
-    const text =
-        decoder.decode(value).trim();
-
-
-    console.log(
-        "Empfangen:",
-        text
-    );
+    const distanceValue =
+        parseFloat(value);
 
 
-    const number =
-        parseFloat(text);
-
-
-    if (!isNaN(number))
-    {
+    if (!isNaN(distanceValue)) {
 
         distance.textContent =
-            number.toFixed(2);
+            distanceValue.toFixed(2);
 
     }
 
 }
-
 
 </script>
 
 </body>
-
 </html>
