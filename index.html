@@ -24,6 +24,17 @@
             align-items: center;
 
             color: #222;
+
+            animation: redBlink 0.5s infinite alternate;
+        }
+
+        @keyframes redBlink {
+            from {
+                background: #ff0000;
+            }
+            to {
+                background: #cc0000;
+            }
         }
 
         .container {
