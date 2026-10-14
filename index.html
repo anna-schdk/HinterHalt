@@ -473,157 +473,146 @@
     );
 
 
+    function setStatus(message, type = "")
+    {
+        status.textContent = message;
+        status.className = type;
+    }
+
+
+    function handleDisconnected()
+    {
+        setStatus("Verbindung verloren", "error");
+
+        connectButton.disabled = false;
+        connectButton.textContent = "Mit HinterHalt verbinden";
+
+        device = null;
+        server = null;
+        distanceCharacteristic = null;
+        warningCharacteristic = null;
+        ledControlCharacteristic = null;
+        blinkMode = false;
+        blinkButton.textContent = "LED-Blinkmodus einschalten";
+        blinkButton.classList.remove("active");
+        ledStatus.textContent = "Blinkmodus ausgeschaltet";
+        warning.style.display = "none";
+        distance.textContent = "--";
+    }
+
+
     async function connectBLE()
     {
+        if (!navigator.bluetooth)
+        {
+            setStatus(
+                "Web Bluetooth wird in diesem Browser nicht unterstützt.",
+                "error"
+            );
+            return;
+        }
+
+        const isSecureContext =
+            window.isSecureContext ||
+            location.hostname === "localhost" ||
+            location.hostname === "127.0.0.1";
+
+        if (!isSecureContext)
+        {
+            setStatus(
+                "Bitte über HTTPS oder localhost öffnen.",
+                "error"
+            );
+            return;
+        }
 
         try
         {
+            setStatus("Suche nach HinterHalt...", "");
+            connectButton.disabled = true;
 
-            status.textContent =
-                "Suche nach HinterHalt...";
+            let selectedDevice;
 
-            status.className = "";
-
-
-            // ------------------------------------------
-            // Gerät suchen
-            // ------------------------------------------
-
-            device =
-                await navigator.bluetooth.requestDevice({
-
-                    filters: [
-
-                        {
-                            name: "HinterHalt"
-                        }
-
-                    ],
-
-                    optionalServices: [
-
-                        SERVICE_UUID
-
-                    ]
-
+            try
+            {
+                selectedDevice = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: [SERVICE_UUID]
                 });
+            }
+            catch (allDevicesError)
+            {
+                selectedDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: "HinterHalt" }],
+                    optionalServices: [SERVICE_UUID]
+                });
+            }
 
+            device = selectedDevice;
+            device.addEventListener("gattserverdisconnected", handleDisconnected);
 
-            status.textContent =
-                "Verbinde mit HinterHalt...";
+            setStatus("Verbinde mit HinterHalt...");
 
+            server = await device.gatt.connect();
 
-            // ------------------------------------------
-            // GATT Verbindung
-            // ------------------------------------------
+            console.log("GATT verbunden, hole Service...");
 
-            server =
-                await device.gatt.connect();
+            const service = await server.getPrimaryService(SERVICE_UUID);
+            console.log("Service gefunden:", SERVICE_UUID);
 
+            try
+            {
+                distanceCharacteristic = await service.getCharacteristic(DISTANCE_UUID);
+                await distanceCharacteristic.startNotifications();
+                distanceCharacteristic.addEventListener("characteristicvaluechanged", handleDistance);
+                console.log("Distance-Characteristic gefunden");
+            }
+            catch (e)
+            {
+                console.error("Distance-Characteristic Fehler:", e);
+                throw new Error("Distance-Characteristic nicht verfügbar: " + e.message);
+            }
 
-            console.log(
-                "BLE verbunden"
-            );
+            try
+            {
+                warningCharacteristic = await service.getCharacteristic(WARNING_UUID);
+                await warningCharacteristic.startNotifications();
+                warningCharacteristic.addEventListener("characteristicvaluechanged", handleWarning);
+                console.log("Warning-Characteristic gefunden");
+            }
+            catch (e)
+            {
+                console.error("Warning-Characteristic Fehler:", e);
+                throw new Error("Warning-Characteristic nicht verfügbar: " + e.message);
+            }
 
+            try
+            {
+                ledControlCharacteristic = await service.getCharacteristic(LED_CONTROL_UUID);
+                console.log("LED-Characteristic gefunden");
+            }
+            catch (e)
+            {
+                console.error("LED-Characteristic Fehler:", e);
+                throw new Error("LED-Characteristic nicht verfügbar: " + e.message);
+            }
 
-            // ------------------------------------------
-            // Service
-            // ------------------------------------------
+            setStatus("Verbunden mit HinterHalt", "connected");
+            connectButton.textContent = "Verbunden";
+            connectButton.disabled = true;
 
-            const service =
-                await server.getPrimaryService(
-                    SERVICE_UUID
-                );
-
-
-            // ------------------------------------------
-            // Abstand
-            // ------------------------------------------
-
-            distanceCharacteristic =
-                await service.getCharacteristic(
-                    DISTANCE_UUID
-                );
-
-
-            await distanceCharacteristic.startNotifications();
-
-
-            distanceCharacteristic.addEventListener(
-                "characteristicvaluechanged",
-                handleDistance
-            );
-
-
-            // ------------------------------------------
-            // Warnung
-            // ------------------------------------------
-
-            warningCharacteristic =
-                await service.getCharacteristic(
-                    WARNING_UUID
-                );
-
-
-            await warningCharacteristic.startNotifications();
-
-
-            warningCharacteristic.addEventListener(
-                "characteristicvaluechanged",
-                handleWarning
-            );
-
-
-            // ------------------------------------------
-            // LED Steuerung
-            // ------------------------------------------
-
-            ledControlCharacteristic =
-                await service.getCharacteristic(
-                    LED_CONTROL_UUID
-                );
-
-
-            // ------------------------------------------
-            // Verbindung erfolgreich
-            // ------------------------------------------
-
-            status.textContent =
-                "Verbunden mit HinterHalt";
-
-            status.className =
-                "connected";
-
-
-            connectButton.textContent =
-                "Verbunden";
-
-            connectButton.disabled =
-                true;
-
-
-            console.log(
-                "Alle BLE Characteristics verbunden"
-            );
-
+            console.log("Alle BLE Characteristics verbunden");
         }
-
-
         catch (error)
         {
-
             console.error(error);
-
-
-            status.textContent =
-                "Verbindung fehlgeschlagen: " +
-                error.message;
-
-            status.className =
-                "error";
-
+            setStatus(
+                "Verbindung fehlgeschlagen: " + (error && error.message ? error.message : error),
+                "error"
+            );
+            connectButton.disabled = false;
+            connectButton.textContent = "Mit HinterHalt verbinden";
         }
-
     }
 
 
@@ -633,31 +622,15 @@
 
     function handleDistance(event)
     {
+        const value = new TextDecoder().decode(event.target.value).trim();
+        console.log("Abstand:", value);
 
-        const value =
-            new TextDecoder().decode(
-                event.target.value
-            );
-
-
-        console.log(
-            "Abstand:",
-            value
-        );
-
-
-        const distanceValue =
-            parseFloat(value);
-
+        const distanceValue = parseFloat(value);
 
         if (!isNaN(distanceValue))
         {
-
-            distance.textContent =
-                distanceValue.toFixed(2);
-
+            distance.textContent = distanceValue.toFixed(2);
         }
-
     }
 
 
@@ -667,39 +640,10 @@
 
     function handleWarning(event)
     {
+        const value = new TextDecoder().decode(event.target.value).trim();
+        console.log("Warnung:", value);
 
-        const value =
-            new TextDecoder().decode(
-                event.target.value
-            );
-
-
-        console.log(
-            "Warnung:",
-            value
-        );
-
-
-        if (value === "1")
-        {
-
-            // Warnung anzeigen
-
-            warning.style.display =
-                "block";
-
-        }
-
-        else
-        {
-
-            // Warnung ausblenden
-
-            warning.style.display =
-                "none";
-
-        }
-
+        warning.style.display = (value === "1") ? "block" : "none";
     }
 
 
@@ -715,112 +659,40 @@
 
     async function toggleBlinkMode()
     {
-
-        // Prüfen ob BLE verbunden
-
-        if (
-            !ledControlCharacteristic
-        )
+        if (!ledControlCharacteristic)
         {
-
-            alert(
-                "Bitte zuerst mit HinterHalt verbinden."
-            );
-
+            alert("Bitte zuerst mit HinterHalt verbinden.");
             return;
-
         }
-
 
         try
         {
-
-            // ------------------------------------------
-            // Blinkmodus EIN
-            // ------------------------------------------
-
             if (!blinkMode)
             {
-
-                const command =
-                    new TextEncoder().encode(
-                        "BLINK"
-                    );
-
-
-                await ledControlCharacteristic.writeValue(
-                    command
-                );
-
+                const command = new TextEncoder().encode("BLINK");
+                await ledControlCharacteristic.writeValue(command);
 
                 blinkMode = true;
-
-
-                blinkButton.textContent =
-                    "LED-Blinkmodus ausschalten";
-
-
-                blinkButton.classList.add(
-                    "active"
-                );
-
-
-                ledStatus.textContent =
-                    "Blinkmodus eingeschaltet";
-
+                blinkButton.textContent = "LED-Blinkmodus ausschalten";
+                blinkButton.classList.add("active");
+                ledStatus.textContent = "Blinkmodus eingeschaltet";
             }
-
-
-            // ------------------------------------------
-            // Blinkmodus AUS
-            // ------------------------------------------
-
             else
             {
-
-                const command =
-                    new TextEncoder().encode(
-                        "OFF"
-                    );
-
-
-                await ledControlCharacteristic.writeValue(
-                    command
-                );
-
+                const command = new TextEncoder().encode("OFF");
+                await ledControlCharacteristic.writeValue(command);
 
                 blinkMode = false;
-
-
-                blinkButton.textContent =
-                    "LED-Blinkmodus einschalten";
-
-
-                blinkButton.classList.remove(
-                    "active"
-                );
-
-
-                ledStatus.textContent =
-                    "Blinkmodus ausgeschaltet";
-
+                blinkButton.textContent = "LED-Blinkmodus einschalten";
+                blinkButton.classList.remove("active");
+                ledStatus.textContent = "Blinkmodus ausgeschaltet";
             }
-
         }
-
-
         catch (error)
         {
-
             console.error(error);
-
-
-            alert(
-                "LED-Befehl konnte nicht gesendet werden."
-            );
-
+            alert("LED-Befehl konnte nicht gesendet werden.");
         }
-
     }
 
 
@@ -828,15 +700,13 @@
     // BLE Verbindung verloren
     // ==================================================
 
-    if (
-        navigator.bluetooth
-    )
+    if (navigator.bluetooth)
     {
-
-        console.log(
-            "Web Bluetooth verfügbar"
-        );
-
+        console.log("Web Bluetooth verfügbar");
+    }
+    else
+    {
+        setStatus("Web Bluetooth wird in diesem Browser nicht unterstützt.", "error");
     }
 
 
